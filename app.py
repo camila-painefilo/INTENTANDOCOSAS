@@ -60,7 +60,7 @@ if option == "Upload an image and get its topic":
 
 # --- 2. Text search as before ---
 elif option == "Search images by text":
-    IMAGE_FOLDER = "images"  # Or "Images", depending on your folder name!
+    IMAGE_FOLDER = "Images"  # Or "Images", depending on your folder name!
     image_files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
 
     @st.cache_resource
