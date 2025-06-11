@@ -6,7 +6,7 @@ import os
 
 # Set IBALab-inspired page config
 st.set_page_config(
-    page_title="IBALab-Inspired CLIP Image Search",
+    page_title="CLIP Image Search",
     layout="centered",
     initial_sidebar_state="auto",
 )
