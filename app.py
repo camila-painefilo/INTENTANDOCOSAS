@@ -4,10 +4,64 @@ import clip
 from PIL import Image
 import os
 
+# Set IBALab-inspired page config
+st.set_page_config(
+    page_title="IBALab-Inspired CLIP Image Search",
+    layout="centered",
+    initial_sidebar_state="auto",
+)
+
+# --- IBALab-inspired CSS for look and feel ---
+st.markdown("""
+    <style>
+    body {
+        background-color: #eaf5fd;
+    }
+    .main {
+        background-color: #ffffff;
+        border-radius: 18px;
+        padding: 32px 24px 24px 24px;
+        box-shadow: 0 4px 24px 0 rgba(33, 82, 161, 0.06);
+    }
+    h1 {
+        background: linear-gradient(90deg, #205fbc 0%, #429fe2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        font-size: 2.6em !important;
+        margin-bottom: 10px;
+    }
+    .stRadio > div {
+        background-color: #f7faff;
+        border-radius: 10px;
+        padding: 10px 18px;
+    }
+    .stButton button {
+        color: white;
+        background: linear-gradient(90deg, #205fbc 0%, #429fe2 100%);
+        border: none;
+        border-radius: 7px;
+        font-weight: 600;
+        font-size: 1.1em;
+        padding: 0.5em 1.2em;
+        transition: box-shadow .2s;
+        box-shadow: 0 2px 8px 0 #2152a11a;
+    }
+    .result-card {
+        background-color: #f7faff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px 0 #2152a11a;
+        margin-bottom: 18px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- CLIP setup ---
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 
-# Candidate topics for image-to-text matching
+# --- Candidate topics for image-to-text matching ---
 topics = [
     "a dog", "a cat", "a horse", "a bird", "a group of people at the beach", "a sunset over the ocean",
     "a city skyline at night", "a busy street market", "a mountain landscape", "a snowy forest",
@@ -68,76 +122,80 @@ topics = [
     "a server room", "a security camera", "a drone flying", "a robot vacuum", "a smart speaker"
 ]
 
+# --- Centered main content ---
+with st.container():
+    st.markdown('<h1>CLIP Image & Topic Explorer</h1>', unsafe_allow_html=True)
+    st.write(
+        "<span style='color:#555555; font-size:1.1em;'>Experience IBALab-inspired image search using AI. Search by text, or upload an image to see what it's about!</span>",
+        unsafe_allow_html=True,
+    )
 
-# --- INTERFACE ---
+    option = st.radio(
+        "Choose an action:",
+        ("🔎 Search images by text", "🖼️ Upload an image to get its topic"),
+        horizontal=True,
+    )
 
-st.title("CLIP Image & Text Search Demo")
+    st.write("")
 
-option = st.radio(
-    "What do you want to do?",
-    ("Upload an image and get its topic", "Search images by text")
-)
+    # --- 1. Text search as before ---
+    if option == "🔎 Search images by text":
+        IMAGE_FOLDER = "Images"  # Or "images", depending on your folder name!
+        image_files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
 
-# --- 1. Upload image and get the topic ---
-if option == "Upload an image and get its topic":
-    uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
-    if uploaded_file:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Your uploaded image", width=300)
+        @st.cache_resource
+        def compute_image_features(image_files):
+            features = []
+            for fname in image_files:
+                image = preprocess(Image.open(os.path.join(IMAGE_FOLDER, fname))).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    feature = model.encode_image(image)
+                features.append(feature.cpu())
+            return torch.cat(features, dim=0)
 
-        # Preprocess and encode image
-        image_input = preprocess(image).unsqueeze(0).to(device)
-        with torch.no_grad():
-            image_features = model.encode_image(image_input).cpu()
+        image_features = compute_image_features(image_files)
 
-        # Encode candidate topics
-        with torch.no_grad():
-            text_tokens = clip.tokenize(topics).to(device)
-            text_features = model.encode_text(text_tokens).cpu()
-
-        # Compute similarities
-        image_features /= image_features.norm(dim=-1, keepdim=True)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-        similarities = (image_features @ text_features.T).squeeze(0)
-        best_idx = similarities.argmax().item()
-        st.success(f"**Best match:** {topics[best_idx]}")
-        # Optionally, show all scores
-        st.write("All topics and scores:")
-        results = sorted(zip(topics, similarities.tolist()), key=lambda x: x[1], reverse=True)
-        for topic, score in results:
-            st.write(f"{topic}: {score:.3f}")
-
-# --- 2. Text search as before ---
-elif option == "Search images by text":
-    IMAGE_FOLDER = "Images"  # Or "Images", depending on your folder name!
-    image_files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
-
-    @st.cache_resource
-    def compute_image_features(image_files):
-        features = []
-        for fname in image_files:
-            image = preprocess(Image.open(os.path.join(IMAGE_FOLDER, fname))).unsqueeze(0).to(device)
+        query = st.text_input("Type your search (e.g., 'group of people at the beach'):", key="query")
+        if query:
             with torch.no_grad():
-                feature = model.encode_image(image)
-            features.append(feature.cpu())
-        return torch.cat(features, dim=0)
+                text_tokens = clip.tokenize([query]).to(device)
+                text_features = model.encode_text(text_tokens).cpu()
 
-    image_features = compute_image_features(image_files)
+            image_features_norm = image_features / image_features.norm(dim=-1, keepdim=True)
+            text_features_norm = text_features / text_features.norm(dim=-1, keepdim=True)
+            similarities = (image_features_norm @ text_features_norm.T).squeeze(1)
+            top_indices = similarities.argsort(descending=True)[:5]
+            st.markdown('<div class="result-card"><b>Top matches:</b></div>', unsafe_allow_html=True)
+            for idx in top_indices:
+                st.image(os.path.join(IMAGE_FOLDER, image_files[idx]), caption=image_files[idx], width=300)
 
-    query = st.text_input("Type your search (e.g., 'group of people at the beach'):")
+    # --- 2. Upload image and get the topic ---
+    elif option == "🖼️ Upload an image to get its topic":
+        uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"], key="fileuploader")
+        if uploaded_file:
+            image = Image.open(uploaded_file).convert("RGB")
+            st.image(image, caption="Your uploaded image", width=320)
 
-    if query:
-        with torch.no_grad():
-            text_tokens = clip.tokenize([query]).to(device)
-            text_features = model.encode_text(text_tokens).cpu()
+            image_input = preprocess(image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                image_features = model.encode_image(image_input).cpu()
+                text_tokens = clip.tokenize(topics).to(device)
+                text_features = model.encode_text(text_tokens).cpu()
 
-        # Compute cosine similarity
-        image_features_norm = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_features_norm = text_features / text_features.norm(dim=-1, keepdim=True)
-        similarities = (image_features_norm @ text_features_norm.T).squeeze(1)
+            image_features /= image_features.norm(dim=-1, keepdim=True)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            similarities = (image_features @ text_features.T).squeeze(0)
+            best_idx = similarities.argmax().item()
 
-        # Show top 5 results
-        top_indices = similarities.argsort(descending=True)[:5]
-        st.subheader("Top matches:")
-        for idx in top_indices:
-            st.image(os.path.join(IMAGE_FOLDER, image_files[idx]), caption=image_files[idx], width=300)
+            st.markdown(
+                f'<div class="result-card"><b>Best match:</b> <span style="color:#205fbc;">{topics[best_idx]}</span></div>',
+                unsafe_allow_html=True
+            )
+            with st.expander("See all topics and scores"):
+                results = sorted(zip(topics, similarities.tolist()), key=lambda x: x[1], reverse=True)
+                for topic, score in results:
+                    st.write(f"{topic}: {score:.3f}")
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.write("<center><small>Inspired by <a href='https://ibalab.quv.kr/' target='_blank'>IBALab</a> • Powered by OpenAI CLIP & Streamlit</small></center>", unsafe_allow_html=True)
+
