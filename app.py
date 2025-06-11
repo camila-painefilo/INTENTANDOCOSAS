@@ -9,7 +9,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 
 # 2. List images in your folder
-IMAGE_FOLDER = "images"
+IMAGE_FOLDER = "Images"
 image_files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
 
 @st.cache_resource
