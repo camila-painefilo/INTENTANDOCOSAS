@@ -119,21 +119,22 @@ topics = [
     "a roller coaster", "a ferris wheel", "a carnival ride", "a ticket booth", "a crowd at a concert",
     "a movie theater", "a popcorn stand", "a person watching a movie", "a person playing video games",
     "a computer screen", "a tablet device", "a smartphone with apps", "a printer on a desk", "a mouse and keyboard",
-    "a server room", "a security camera", "a drone flying", "a robot vacuum", "a smart speaker"
+    "a server room", "a security camera", "a drone flying", "a robot vacuum", "a smart speaker", "a dog running", "a dog drinking water", "glaciar climbing"
 ]
 
 # --- Centered main content ---
 with st.container():
     st.markdown('<h1>CLIP Image & Topic Explorer</h1>', unsafe_allow_html=True)
     st.write(
-        "<span style='color:#555555; font-size:1.1em;'>Experience IBALab-inspired image search using AI. Search by text, or upload an image to see what it's about!</span>",
+        "<span style='color:#555555; font-size:1.1em;'>Experience image search using AI. Search by text, or upload an image to see what it's about!</span>",
         unsafe_allow_html=True,
     )
 
     option = st.radio(
         "Choose an action:",
         ("🔎 Search images by text", "🖼️ Upload an image to get its topic"),
-        horizontal=True,
+        horizontal=True, 
+        index=1
     )
 
     st.write("")
@@ -166,8 +167,11 @@ with st.container():
             similarities = (image_features_norm @ text_features_norm.T).squeeze(1)
             top_indices = similarities.argsort(descending=True)[:5]
             st.markdown('<div class="result-card"><b>Top matches:</b></div>', unsafe_allow_html=True)
-            for idx in top_indices:
-                st.image(os.path.join(IMAGE_FOLDER, image_files[idx]), caption=image_files[idx], width=300)
+            cols = st.columns(len(top_indices))
+            for i, idx in enumerate(top_indices):
+                with cols[i]:
+                    st.image(os.path.join(IMAGE_FOLDER, image_files[idx]), caption=image_files[idx], use_column_width=True)
+
 
     # --- 2. Upload image and get the topic ---
     elif option == "🖼️ Upload an image to get its topic":
